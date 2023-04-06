@@ -81,7 +81,37 @@ class TSPSolver:
 	'''
 
 	def greedy( self,time_allowance=60.0 ):
-		pass
+		start_time = time.time()
+
+		results = {}
+		cities = self._scenario.getCities()
+		visited = []
+		not_visited = cities
+
+		city = cities[0]
+		visited.append(city)
+		not_visited.remove(city)
+
+		while len(not_visited) > 0 and time.time()-start_time < time_allowance:
+			next_city = min(not_visited, key=lambda x: city.costTo(x))
+
+			if city.costTo(next_city) == float('inf'):
+				break
+			visited.append(next_city)
+			not_visited.remove(next_city)
+			city = next_city
+		end_time = time.time()
+
+		bssf = TSPSolution(visited)
+		results['cost'] = bssf.cost if not bssf.cost == np.inf else math.inf
+		results['time'] = end_time - start_time
+		results['count'] = 1
+		results['soln'] = bssf
+		results['max'] = None
+		results['total'] = None
+		results['pruned'] = None
+
+		return results
 
 
 
@@ -95,8 +125,14 @@ class TSPSolver:
 	'''
 
 	def branchAndBound( self, time_allowance=60.0 ):
-		pass
+		results = self.greedy()
+		if results['cost'] == math.inf:
+			# Greedy Algorithm was unable to find a valid solution, use random default solution instead.
+			results = self.defaultRandomTour()
 
+
+
+		pass
 
 
 	''' <summary>
