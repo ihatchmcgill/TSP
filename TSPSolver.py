@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import copy
 
 from which_pyqt import PYQT_VER
 if PYQT_VER == 'PYQT5':
@@ -16,6 +17,9 @@ import numpy as np
 from TSPClasses import *
 import heapq
 import itertools
+
+
+
 
 
 class TSPSolver:
@@ -81,17 +85,16 @@ class TSPSolver:
 	'''
 
 	def greedy( self,time_allowance=60.0 ):
-		start_time = time.time()
-
 		results = {}
 		cities = self._scenario.getCities()
 		visited = []
-		not_visited = cities
+		not_visited = copy.copy(cities)
 
 		city = cities[0]
 		visited.append(city)
 		not_visited.remove(city)
 
+		start_time = time.time()
 		while len(not_visited) > 0 and time.time()-start_time < time_allowance:
 			next_city = min(not_visited, key=lambda x: city.costTo(x))
 
@@ -125,15 +128,26 @@ class TSPSolver:
 	'''
 
 	def branchAndBound( self, time_allowance=60.0 ):
+		cities = self._scenario.getCities()
+		start_time = time.time()
 		results = self.greedy()
 		if results['cost'] == math.inf:
 			# Greedy Algorithm was unable to find a valid solution, use random default solution instead.
 			results = self.defaultRandomTour()
 
-
-
+		# Ideally place in separate function
+		cost_matrix = self.get_cost_matrix()
 		pass
 
+	def get_cost_matrix(self):
+		cities = self._scenario.getCities()
+		ncities = len(cities)
+		distance_matrix = [[float('inf') for j in range(ncities)] for i in range(ncities)]
+
+		for i in range(ncities):
+			for j in range(ncities):
+				distance_matrix[i][j] = cities[i].costTo(cities[j])
+		return distance_matrix
 
 	''' <summary>
 		This is the entry point for the algorithm you'll write for your group project.
@@ -146,3 +160,5 @@ class TSPSolver:
 
 	def fancy( self,time_allowance=60.0 ):
 		pass
+
+
