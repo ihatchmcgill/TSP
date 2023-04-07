@@ -133,35 +133,40 @@ class TSPSolver:
             # Greedy Algorithm was unable to find a valid solution, use random default solution instead.
             results = self.defaultRandomTour()
 
-        bssf_cost = results['cost']
+        pq = []
+        path = [cities[0]]
 
-        if bssf_cost == math.inf:
+        bssf_cost_and_path = (results['cost'], path)
+
+        if bssf_cost_and_path == math.inf:
             # No starting solution
             return results
 
         # Viable solution
         num_states += 1
 
-        pq = []
-        path = [cities[0]]
+
 
         distance_matrix = self.generate_inital_matrix()
         reduced_matrix, lower_bound = self.reduce_matrix(distance_matrix);
 
         # Create tuple and push onto pq
         heapq.heappush(pq, (lower_bound, reduced_matrix, path))
+
         max_num_states += 1
         while len(pq) != 0 and time.time() - start_time < time_allowance:
-            curr_state = heapq.heappop(pq);
-            if curr_state[0] < bssf_cost:
+            # Pop off pq, prioritizes depth and then lowerbound
+            curr_state = heapq.heappop(pq, key=self.compare_depth_and_bound);
+            if curr_state[0] < bssf_cost_and_path:
                 sub_states = self.expand_state(curr_state)
                 for state in sub_states:
-                    # If state is a leaf node and lowerbound < bssf
-                    if len(state[2]) == num_cities and state[0] < bssf_cost:
-                        bssf_cost = state[0]
+                    # If state is a leaf node and lowerbound < bssf. Bottom node must actually get back to starting node.
+                    if len(state[2]) == num_cities and state[0] < bssf_cost_and_path \
+                            and state[2][num_cities - 1].costTo(path[0]) != float('inf'):
+                        bssf_cost_and_path = (state[0], state[2])
                         num_solutions += 1
                     # Not a leaf node, but partial solution. Add to pq
-                    elif state[0] < bssf_cost:
+                    elif state[0] < bssf_cost_and_path:
                         heapq.heappush(pq, state)
                         if len(pq) > max_num_states:
                             max_num_states = len(pq)
@@ -169,7 +174,7 @@ class TSPSolver:
                         num_pruned += 1
 
         end_time = time.time()
-        bssf = TSPSolution(path)
+        bssf = TSPSolution(bssf_cost_and_path[1])
         results['cost'] = bssf.cost
         results['time'] = end_time - start_time
         results['count'] = num_solutions
@@ -178,6 +183,22 @@ class TSPSolver:
         results['total'] = num_states
         results['pruned'] = num_pruned
         return results
+
+    def compare_depth_and_bound(self, t1, t2):
+        # Compares depth (greater path length is prioritized)
+        if len(t1[2]) > len(t2[2]):
+            return -1
+        elif len(t1[2]) < len(t2[2]):
+            return 1
+
+        # Then compares bound
+        else:
+            if t1[0] < t2[0]:
+                return -1
+            elif t1[0] > t2[0]:
+                return 1
+            else:
+                return 0
 
     def expand_state(self, state):
         sub_states = []
