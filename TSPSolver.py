@@ -138,7 +138,7 @@ class TSPSolver:
 
         bssf_cost_and_path = (results['cost'], path)
 
-        if bssf_cost_and_path == math.inf:
+        if bssf_cost_and_path[0] == math.inf:
             # No starting solution
             return results
 
@@ -157,16 +157,16 @@ class TSPSolver:
         while len(pq) != 0 and time.time() - start_time < time_allowance:
             # Pop off pq, prioritizes depth and then lowerbound
             curr_state = heapq.heappop(pq, key=self.compare_depth_and_bound);
-            if curr_state[0] < bssf_cost_and_path:
+            if curr_state[0] < bssf_cost_and_path[0]:
                 sub_states = self.expand_state(curr_state)
                 for state in sub_states:
                     # If state is a leaf node and lowerbound < bssf. Bottom node must actually get back to starting node.
-                    if len(state[2]) == num_cities and state[0] < bssf_cost_and_path \
-                            and state[2][num_cities - 1].costTo(path[0]) != float('inf'):
+                    if len(state[2]) == num_cities and state[0] < bssf_cost_and_path[0] \
+                            and state[2][num_cities - 1].costTo(cities[0]) != float('inf'):
                         bssf_cost_and_path = (state[0], state[2])
                         num_solutions += 1
                     # Not a leaf node, but partial solution. Add to pq
-                    elif state[0] < bssf_cost_and_path:
+                    elif state[0] < bssf_cost_and_path[0]:
                         heapq.heappush(pq, state)
                         if len(pq) > max_num_states:
                             max_num_states = len(pq)
