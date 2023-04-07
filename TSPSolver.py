@@ -156,7 +156,7 @@ class TSPSolver:
         max_num_states += 1
         while len(pq) != 0 and time.time() - start_time < time_allowance:
             # Pop off pq, prioritizes depth and then lowerbound
-            curr_state = heapq.heappop(pq, key=self.compare_depth_and_bound);
+            curr_state = heapq.heappop(pq)
             if curr_state[0] < bssf_cost_and_path[0]:
                 sub_states = self.expand_state(curr_state)
                 for state in sub_states:
