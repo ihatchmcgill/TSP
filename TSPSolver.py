@@ -93,9 +93,9 @@ class TSPSolver:
         while len(not_visited) > 0 and time.time() - start_time < time_allowance:
             next_city = min(not_visited, key=lambda x: city.costTo(x))
 
+            visited.append(next_city)
             if city.costTo(next_city) == float('inf'):
                 break
-            visited.append(next_city)
             not_visited.remove(next_city)
             city = next_city
         end_time = time.time()
@@ -119,24 +119,92 @@ class TSPSolver:
 		not include the initial BSSF), the best solution found, and three more ints:
 		max queue size, total number of states created, and number of pruned states.</returns>
 	'''
-
     def branchAndBound(self, time_allowance=60.0):
+        num_pruned = 0
+        num_solutions = 0
+        num_states = 0
+        max_num_states = 0
+
         cities = self._scenario.getCities()
+        num_cities = len(cities)
         start_time = time.time()
         results = self.greedy()
         if results['cost'] == math.inf:
             # Greedy Algorithm was unable to find a valid solution, use random default solution instead.
             results = self.defaultRandomTour()
-        bssf = results['cost']
+
+        bssf_cost = results['cost']
+
+        if bssf_cost == math.inf:
+            # No starting solution
+            return results
+
+        # Viable solution
+        num_states += 1
 
         pq = []
-        reduced_matrix, lower_bound = self.get_initial_state()
+        path = [cities[0]]
 
-        # Create dictionary and push onto pq
+        distance_matrix = self.generate_inital_matrix()
+        reduced_matrix, lower_bound = self.reduce_matrix(distance_matrix);
 
-        pass
+        # Create tuple and push onto pq
+        heapq.heappush(pq, (lower_bound, reduced_matrix, path))
+        max_num_states += 1
+        while len(pq) != 0 and time.time() - start_time < time_allowance:
+            curr_state = heapq.heappop(pq);
+            if curr_state[0] < bssf_cost:
+                sub_states = self.expand_state(curr_state)
+                for state in sub_states:
+                    # If state is a leaf node and lowerbound < bssf
+                    if len(state[2]) == num_cities and state[0] < bssf_cost:
+                        bssf_cost = state[0]
+                        num_solutions += 1
+                    # Not a leaf node, but partial solution. Add to pq
+                    elif state[0] < bssf_cost:
+                        heapq.heappush(pq, state)
+                        if len(pq) > max_num_states:
+                            max_num_states = len(pq)
+                    else:
+                        num_pruned += 1
 
-    def get_initial_state(self):
+        end_time = time.time()
+        bssf = TSPSolution(path)
+        results['cost'] = bssf.cost
+        results['time'] = end_time - start_time
+        results['count'] = num_solutions
+        results['soln'] = bssf
+        results['max'] = max_num_states
+        results['total'] = num_states
+        results['pruned'] = num_pruned
+        return results
+
+    def expand_state(self, state):
+        sub_states = []
+        cities = self._scenario.getCities()
+        num_cities = len(state)
+        for i in range(num_cities):
+            for j in range(num_cities):
+                if state[1][i][j] == 0:
+                    copied_state = copy.deepcopy(state)
+                    copied_state[2].append(cities[j])
+
+                    # Set Col and Row to infinity
+                    copied_state[1][j][i] = float('inf')
+                    copied_state[1][i] = [float('inf') for _ in range(num_cities)]
+                    for k in range(num_cities):
+                        copied_state[1][k][j] = float('inf')
+
+                    # Get new matrix and lower bound
+                    reduced_matrix, lower_bound = self.reduce_matrix(copied_state[1])
+
+                    #Update new state
+                    new_state = (copied_state[0] + lower_bound, reduced_matrix, copied_state[2])
+                    sub_states.append(new_state)
+        return sub_states
+
+
+    def generate_inital_matrix(self):
         cities = self._scenario.getCities()
         ncities = len(cities)
         distance_matrix = [[float('inf') for j in range(ncities)] for i in range(ncities)]
@@ -145,9 +213,7 @@ class TSPSolver:
             for j in range(ncities):
                 distance_matrix[i][j] = cities[i].costTo(cities[j])
 
-        distance_matrix, lower_bound = self.reduce_matrix(distance_matrix)
-
-        return distance_matrix, lower_bound
+        return distance_matrix
 
     def reduce_matrix(self, matrix):
         # Subtract the minimum value from each row and each column
@@ -156,15 +222,29 @@ class TSPSolver:
         # Subtract the minimum value from each element in the row
         for i in range(len(matrix)):
             for j in range(len(matrix[i])):
-                matrix[i][j] -= row_min[i]
+                if row_min[i] == float('inf') or row_min[i] == 0:
+                    break
+                else:
+                    matrix[i][j] -= row_min[i]
         # Find the minimum value in each column
         col_min = [min(col) for col in zip(*matrix)]
         # Subtract the minimum value from each element in the column
         for j in range(len(matrix)):
             for i in range(len(matrix[j])):
-                matrix[i][j] -= col_min[j]
+                if col_min[j] == float('inf') or col_min[j] == 0:
+                    break
+                else:
+                    matrix[i][j] -= col_min[j]
 
-        lower_bound = sum(row_min) + sum(col_min)
+        row_sum = 0
+        col_sum = 0
+        for num in row_min:
+            if not math.isinf(num):
+                row_sum += num
+        for num in col_min:
+            if not math.isinf(num):
+                col_sum += num
+        lower_bound = row_sum + col_sum
         return matrix, lower_bound
 
     ''' <summary>
