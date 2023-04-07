@@ -5,8 +5,6 @@ from which_pyqt import PYQT_VER
 
 if PYQT_VER == 'PYQT5':
     from PyQt5.QtCore import QLineF, QPointF
-elif PYQT_VER == 'PYQT4':
-    from PyQt4.QtCore import QLineF, QPointF
 elif PYQT_VER == 'PYQT6':
     from PyQt6.QtCore import QLineF, QPointF
 else:
@@ -119,6 +117,7 @@ class TSPSolver:
 		not include the initial BSSF), the best solution found, and three more ints:
 		max queue size, total number of states created, and number of pruned states.</returns>
 	'''
+
     def branchAndBound(self, time_allowance=60.0):
         num_pruned = 0
         num_solutions = 0
@@ -136,45 +135,46 @@ class TSPSolver:
         pq = []
         path = [cities[0]]
 
-        bssf_cost_and_path = (results['cost'], path)
+        bssf = results['soln']
 
-        if bssf_cost_and_path[0] == math.inf:
+        if bssf.cost == math.inf:
             # No starting solution
             return results
 
         # Viable solution
         num_states += 1
 
-
-
         distance_matrix = self.generate_inital_matrix()
-        reduced_matrix, lower_bound = self.reduce_matrix(distance_matrix);
+        reduced_matrix, lower_bound = self.reduce_matrix(distance_matrix)
 
         # Create tuple and push onto pq
-        heapq.heappush(pq, (lower_bound, reduced_matrix, path))
-
+        heapq.heappush(pq, (lower_bound, -len(path), id(reduced_matrix), reduced_matrix, path))
         max_num_states += 1
-        while len(pq) != 0 and time.time() - start_time < time_allowance:
+
+        while len(pq) != 0: # and time.time() - start_time < time_allowance:
             # Pop off pq, prioritizes depth and then lowerbound
             curr_state = heapq.heappop(pq)
-            if curr_state[0] < bssf_cost_and_path[0]:
+            if curr_state[0] < bssf.cost:
                 sub_states = self.expand_state(curr_state)
                 for state in sub_states:
+                    num_states += 1
                     # If state is a leaf node and lowerbound < bssf. Bottom node must actually get back to starting node.
-                    if len(state[2]) == num_cities and state[0] < bssf_cost_and_path[0] \
-                            and state[2][num_cities - 1].costTo(cities[0]) != float('inf'):
-                        bssf_cost_and_path = (state[0], state[2])
+                    if len(state[4]) == num_cities and state[0] < bssf.cost \
+                            and state[4][-1].costTo(cities[0]) != float('inf'):
+                        bssf.cost = state[0]
+                        bssf.route = state[4]
                         num_solutions += 1
                     # Not a leaf node, but partial solution. Add to pq
-                    elif state[0] < bssf_cost_and_path[0]:
+                    elif state[0] < bssf.cost and len(state[4]) != num_cities:
                         heapq.heappush(pq, state)
                         if len(pq) > max_num_states:
                             max_num_states = len(pq)
                     else:
                         num_pruned += 1
+            else:
+                num_pruned += 1
 
         end_time = time.time()
-        bssf = TSPSolution(bssf_cost_and_path[1])
         results['cost'] = bssf.cost
         results['time'] = end_time - start_time
         results['count'] = num_solutions
@@ -184,46 +184,35 @@ class TSPSolver:
         results['pruned'] = num_pruned
         return results
 
-    def compare_depth_and_bound(self, t1, t2):
-        # Compares depth (greater path length is prioritized)
-        if len(t1[2]) > len(t2[2]):
-            return -1
-        elif len(t1[2]) < len(t2[2]):
-            return 1
-
-        # Then compares bound
-        else:
-            if t1[0] < t2[0]:
-                return -1
-            elif t1[0] > t2[0]:
-                return 1
-            else:
-                return 0
 
     def expand_state(self, state):
         sub_states = []
         cities = self._scenario.getCities()
-        num_cities = len(state)
-        for i in range(num_cities):
-            for j in range(num_cities):
-                if state[1][i][j] == 0:
-                    copied_state = copy.deepcopy(state)
-                    copied_state[2].append(cities[j])
+        num_cities = len(cities)
+        curr_city = state[4][-1]
+        city_row = cities.index(curr_city)
 
-                    # Set Col and Row to infinity
-                    copied_state[1][j][i] = float('inf')
-                    copied_state[1][i] = [float('inf') for _ in range(num_cities)]
-                    for k in range(num_cities):
-                        copied_state[1][k][j] = float('inf')
+        for j in range(num_cities):
+            if state[3][city_row][j] != float('inf'):
+                # City is a copy but different memory address
+                copied_state = copy.deepcopy(state)
+                starting_cost = state[3][city_row][j]
 
-                    # Get new matrix and lower bound
-                    reduced_matrix, lower_bound = self.reduce_matrix(copied_state[1])
+                copied_state[4].append(cities[j])
 
-                    #Update new state
-                    new_state = (copied_state[0] + lower_bound, reduced_matrix, copied_state[2])
-                    sub_states.append(new_state)
+                # Set Col and Row to infinity
+                copied_state[3][j][city_row] = float('inf')
+                copied_state[3][city_row] = [float('inf') for _ in range(num_cities)]
+                for k in range(num_cities):
+                    copied_state[3][k][j] = float('inf')
+
+                # Get new matrix and lower bound
+                reduced_matrix, lower_bound = self.reduce_matrix(copied_state[3])
+
+                # Update new state
+                new_state = (copied_state[0] + starting_cost+ lower_bound, -len(copied_state[4]), id(reduced_matrix), reduced_matrix, copied_state[4])
+                sub_states.append(new_state)
         return sub_states
-
 
     def generate_inital_matrix(self):
         cities = self._scenario.getCities()
@@ -242,20 +231,18 @@ class TSPSolver:
         row_min = [min(row) for row in matrix]
         # Subtract the minimum value from each element in the row
         for i in range(len(matrix)):
+            if row_min[i] == float('inf') or row_min[i] == 0:
+                continue
             for j in range(len(matrix[i])):
-                if row_min[i] == float('inf') or row_min[i] == 0:
-                    break
-                else:
-                    matrix[i][j] -= row_min[i]
+                matrix[i][j] -= row_min[i]
         # Find the minimum value in each column
         col_min = [min(col) for col in zip(*matrix)]
         # Subtract the minimum value from each element in the column
         for j in range(len(matrix)):
+            if col_min[j] == float('inf') or col_min[j] == 0:
+                continue
             for i in range(len(matrix[j])):
-                if col_min[j] == float('inf') or col_min[j] == 0:
-                    break
-                else:
-                    matrix[i][j] -= col_min[j]
+                matrix[i][j] -= col_min[j]
 
         row_sum = 0
         col_sum = 0
