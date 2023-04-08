@@ -147,11 +147,12 @@ class TSPSolver:
         distance_matrix = self.generate_inital_matrix()
         reduced_matrix, lower_bound = self.reduce_matrix(distance_matrix)
 
-        # Create tuple and push onto pq
-        heapq.heappush(pq, (lower_bound, -len(path), id(reduced_matrix), reduced_matrix, path))
+        # Create tuple and push onto pq.
+        # Ordered by depth and then lowerbound. Use id as well to prevent comparing city or matrix objects
+        heapq.heappush(pq, (-len(path), lower_bound, id(reduced_matrix), reduced_matrix, path))
         max_num_states += 1
 
-        while len(pq) != 0: # and time.time() - start_time < time_allowance:
+        while len(pq) != 0 and time.time() - start_time < time_allowance:
             # Pop off pq, prioritizes depth and then lowerbound
             curr_state = heapq.heappop(pq)
             if curr_state[0] < bssf.cost:
@@ -159,13 +160,13 @@ class TSPSolver:
                 for state in sub_states:
                     num_states += 1
                     # If state is a leaf node and lowerbound < bssf. Bottom node must actually get back to starting node.
-                    if len(state[4]) == num_cities and state[0] < bssf.cost \
+                    if len(state[4]) == num_cities and state[1] < bssf.cost \
                             and state[4][-1].costTo(cities[0]) != float('inf'):
-                        bssf.cost = state[0]
+                        bssf.cost = state[1]
                         bssf.route = state[4]
                         num_solutions += 1
                     # Not a leaf node, but partial solution. Add to pq
-                    elif state[0] < bssf.cost and len(state[4]) != num_cities:
+                    elif state[1] < bssf.cost and len(state[4]) != num_cities:
                         heapq.heappush(pq, state)
                         if len(pq) > max_num_states:
                             max_num_states = len(pq)
@@ -210,7 +211,7 @@ class TSPSolver:
                 reduced_matrix, lower_bound = self.reduce_matrix(copied_state[3])
 
                 # Update new state
-                new_state = (copied_state[0] + starting_cost+ lower_bound, -len(copied_state[4]), id(reduced_matrix), reduced_matrix, copied_state[4])
+                new_state = (-len(copied_state[4]), copied_state[1] + starting_cost + lower_bound, id(reduced_matrix), reduced_matrix, copied_state[4])
                 sub_states.append(new_state)
         return sub_states
 
