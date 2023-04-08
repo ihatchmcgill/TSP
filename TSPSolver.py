@@ -175,6 +175,13 @@ class TSPSolver:
             else:
                 num_pruned += 1
 
+        if time.time() - start_time < time_allowance:
+            # Ran out of time
+            for state in pq:
+                if state[1] > bssf.cost:
+                    num_pruned += 1
+
+
         end_time = time.time()
         results['cost'] = bssf.cost
         results['time'] = end_time - start_time
